@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">CountriesToCities</string>
+    <string name="BROADCAST_ACTION">androidcountries.intent.action.BROADCAST</string>
+    <string name="EXTRAS_INFO">androidcountries.intent.action.INFO</string>
+</resources>
