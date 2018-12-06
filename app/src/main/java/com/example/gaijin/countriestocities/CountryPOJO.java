@@ -5,17 +5,20 @@ import java.util.List;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
+import io.realm.annotations.PrimaryKey;
 
 public class CountryPOJO {
 
     @SerializedName("country_name")
     @Expose
-    private String countryName;
+    String countryName;
     @SerializedName("cities")
     @Expose
-    private List<String> cities = new ArrayList<String>();
+    List<String> cities = new ArrayList<String>();
 
-    public String getCountryName(){
+    public CountryPOJO(){}
+
+    public String getCountryName() {
         return countryName;
     }
 

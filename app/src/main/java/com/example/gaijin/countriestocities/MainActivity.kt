@@ -18,6 +18,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
 import android.util.Log
+import android.widget.Toast
+import android.net.ConnectivityManager
+import android.net.NetworkInfo
 
 
 class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
@@ -31,40 +34,92 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        //
         realmDB = Realm.getDefaultInstance()
 
-        // создаем фильтр для BroadcastReceiver
-        val intentFilter = IntentFilter(getString(R.string.BROADCAST_ACTION))
-        // регистрируем (включаем) BroadcastReceiver
+        // Create and connect to Broadcast
+        val intentFilter = IntentFilter()
+        intentFilter.addAction(getString(R.string.BROADCAST_ACTION))
+        loaderReceiver = LoaderDBReceiver()
         registerReceiver(loaderReceiver, intentFilter)
 
-        if (realmDB!!.isEmpty) {
-            startService(Intent(this, LoadCountriesService::class.java))
-            return;
-        } else {
-
-        }
+        loadData()
 
     }
 
+    private fun loadData() {
+        // Check internet connection
+        if (hasInternet(applicationContext)) {
+            if (realmDB!!.isEmpty) {
+                startService(Intent(this, LoadCountriesService::class.java))
+                Toast.makeText(this, "DB is empty", Toast.LENGTH_SHORT).show()
+                return;
+            } else {
+                val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+                broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK))
+                Toast.makeText(this, "DB is NOT empty", Toast.LENGTH_SHORT).show()
+                sendBroadcast(broadcastIntent)
+            }
+        } else {
+            val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
+            broadcastIntent.putExtra(
+                getString(R.string.EXTRA_CONNECTION_RESULT),
+                getString(R.string.check_internet)
+            )
+            Toast.makeText(this, "Problem with internet", Toast.LENGTH_SHORT).show()
+            sendBroadcast(broadcastIntent)
+        }
+    }
 
-    private fun prepareView() {
-        // Prepare view components
+    override fun onStart() {
+        super.onStart()
+        //Preparation of view components
+        country_spinner.visibility = View.INVISIBLE
+        city_list.visibility = View.INVISIBLE
+        error_text.visibility = View.INVISIBLE
+
         manager = LinearLayoutManager(this)
         city_list.layoutManager = manager
+        adapter = CityAdapter();
+        adapter!!.setOnItemClickListener(this)
+        city_list.adapter = adapter
+    }
+
+    fun hasInternet(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        var wifiInfo: NetworkInfo? = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
+        if (wifiInfo != null && wifiInfo.isConnected) {
+            return true
+        }
+        wifiInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_MOBILE)
+        if (wifiInfo != null && wifiInfo.isConnected) {
+            return true
+        }
+        wifiInfo = cm.activeNetworkInfo
+        return wifiInfo != null && wifiInfo.isConnected
+    }
+
+    private fun prepareView() {
 
         // Load list of countries from DB
         countries = loadCountries()
         val arrayAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, countries)
         country_spinner.adapter = arrayAdapter
+
         country_spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener,
             AdapterView.OnItemClickListener {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
             override fun onItemClick(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {}
 
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                Snackbar.make(view!!, "Country ${countries!![position]} selected", Snackbar.LENGTH_SHORT).show()
-                loadCities(countries!![position])
+                adapter!!.cities = loadCities(countries!![position])
+                Snackbar.make(
+                    view!!,
+                    "${countries!![position]} selected. Count of cities: ${adapter!!.itemCount}",
+                    Snackbar.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -77,43 +132,35 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
             countryList.add(city.countryName)
         }
         realmDB!!.commitTransaction()
-//        return cities.toArray() as Array<String>?
+        countryList.sort()
         return countryList
     }
 
-    private fun loadCities(country: String) {
+    private fun loadCities(country: String): List<String> {
         // Load countries form DB
         realmDB!!.beginTransaction()
-        var cities: RealmResults<City> = realmDB!!.where(City::class.java).equalTo("country", country).findAll()
+        var countries: RealmResults<Country> =
+            realmDB!!.where(Country::class.java).equalTo("countryName", country).findAll()
         var cityList = ArrayList<String>()
-        for (city in cities) {
-            cityList.add(city.name)
+        for (city in countries[0]!!.cities) {
+            cityList.add(city.cityName)
         }
         realmDB!!.commitTransaction()
-        // Prepare view components
-        adapter = CityAdapter(cities)
-        adapter!!.setOnItemClickListener(this)
-        city_list.adapter = adapter
-    }
-
-
-    override fun onStart() {
-        super.onStart()
-        city_list.adapter = adapter
-        city_list.layoutManager = manager
+        cityList.sort()
+        return cityList
     }
 
     override fun onItemClick(view: View?, position: Int) {
-        var city: City? = null
+        var city: String? = null
         try {
-            city = adapter!!.cities.get(position)
+            city = adapter!!.cities[position]
         } catch (ex: Exception) {
             return
         }
 
         if (city != null) {
             var intent = Intent(getString(R.string.EXTRAS_INFO))
-            intent.putExtra(Intent.EXTRA_TEXT, city.name)
+            intent.putExtra(Intent.EXTRA_TEXT, city)
             startActivity(intent)
         }
     }
@@ -124,9 +171,27 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
     inner class LoaderDBReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            unregisterLoaderReceiver(loaderReceiver);
             Log.d("12", "Broadcast was receive")
-            prepareView()
+            Toast.makeText(applicationContext, "Broadcast was receive", Toast.LENGTH_SHORT).show()
+            var status: String = intent.getStringExtra(getString(R.string.EXTRA_STATUS))
+            load_progress.visibility = View.INVISIBLE
+            when (status) {
+                getString(R.string.STATUS_OK) -> {
+                    unregisterLoaderReceiver(loaderReceiver)
+                    country_spinner.visibility = View.VISIBLE
+                    city_list.visibility = View.VISIBLE
+                    prepareView()
+                }
+                getString(R.string.STATUS_NOK) -> {
+                    var response: String? = intent.getStringExtra(getString(R.string.EXTRA_CONNECTION_RESULT))
+                    error_text.text = "Error! $response"
+                    error_text.visibility = View.VISIBLE
+                }
+                else -> {
+                }
+            }
+
+
         }
     }
 }

@@ -11,6 +11,6 @@ class InfoActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_info)
         var cityName: String = intent.getStringExtra(Intent.EXTRA_TEXT)
-        city_name.text = cityName
+        name_of_city.text = cityName
     }
 }

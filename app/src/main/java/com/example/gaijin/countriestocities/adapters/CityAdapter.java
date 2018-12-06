@@ -7,29 +7,28 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-import butterknife.BindView;
-import butterknife.ButterKnife;
-import butterknife.OnClick;
-import com.example.gaijin.countriestocities.City;
 import com.example.gaijin.countriestocities.R;
 
 import java.util.List;
 
 public class CityAdapter extends RecyclerView.Adapter<CityAdapter.ViewHolder> {
 
-    private List<City> cities;
+    private List<String> cities;
 
-    public List<City> getCities() {
+    public List<String> getCities() {
         return cities;
     }
 
-    public void setCities(List<City> cities) {
-        this.cities = cities;
-        notifyDataSetChanged();
+    public CityAdapter() {
     }
 
-    public CityAdapter(List<City> cities) {
+    public CityAdapter(List<String> cities) {
         this.cities = cities;
+    }
+
+    public void setCities(List<String> cities) {
+        this.cities = cities;
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -41,14 +40,23 @@ public class CityAdapter extends RecyclerView.Adapter<CityAdapter.ViewHolder> {
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder viewHolder, int i) {
-        String city = cities.get(i).getName();
-        viewHolder.cityName.setText(city);
+        String city = cities.get(i);
+        try {
+            viewHolder.cityName.setText(city);
+        } catch (Exception ex) {
+            ex.getStackTrace();
+        }
     }
 
 
     @Override
     public int getItemCount() {
-        return cities.size();
+        int size = 0;
+        try {
+            size = cities.size();
+        } catch (Exception ex) {
+        }
+        return size;
     }
 
     /*This interfaces and next function, need for binding on clicked item position*/
@@ -64,17 +72,18 @@ public class CityAdapter extends RecyclerView.Adapter<CityAdapter.ViewHolder> {
 
     public class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener {
 
-        @BindView(R.id.city_name)
         TextView cityName;
-        @BindView(R.id.city_card)
         CardView cityCard;
 
         public ViewHolder(View itemView) {
             super(itemView);
-            ButterKnife.bind(this, itemView);
+            cityName = (TextView) itemView.findViewById(R.id.city_name);
+            cityCard = (CardView) itemView.findViewById(R.id.city_card);
+            cityName.setOnClickListener(this);
+            cityCard.setOnClickListener(this);
         }
 
-        @OnClick({R.id.city_name, R.id.city_card})
+        @Override
         public void onClick(View view) {
             if (ItemClickListener != null) {
                 ItemClickListener.onItemClick(view, getAdapterPosition());

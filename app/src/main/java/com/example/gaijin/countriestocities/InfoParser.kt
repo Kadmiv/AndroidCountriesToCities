@@ -7,10 +7,9 @@ class InfoParser() {
 
     public fun parseCountryInfo(countryString: String): CountryPOJO? {
         //Remove extra characters
-        var cleanSample = countryString.replace("{", "")
-        cleanSample = cleanSample.replace("}", "")
-        if (cleanSample[0].equals(",")) {
-            cleanSample = cleanSample.substring(1)
+        var cleanSample = countryString
+        if (countryString[0] == ',') {
+            cleanSample = countryString.substring(1)
         }
         try {
             // Normalize of object string
@@ -19,8 +18,8 @@ class InfoParser() {
             // Convert string to CountryPOJO object
             var gson: Gson = Gson()
             var country: CountryPOJO = gson.fromJson(cleanSample, CountryPOJO::class.java)
+//            System.out.println(country.toString());
             return country
-            System.out.println(country.toString());
         } catch (ex: Exception) {
             ex.stackTrace
         }

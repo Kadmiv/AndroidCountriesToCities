@@ -10,21 +10,20 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import io.realm.Realm;
+import io.realm.RealmList;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.List;
 
 import static java.lang.Thread.sleep;
 
 public class LoadCountriesService extends Service {
 
     private final String JSON_URL = "https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json";
-    private final int TIME_OUT = 5000;
+    private final int TIME_OUT = 30000;
     private Realm realmDB = null;
 
     public LoadCountriesService() {
@@ -44,81 +43,111 @@ public class LoadCountriesService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
 
-        Runnable runnable = () -> {
-            try {
-                HttpURLConnection connection = (HttpURLConnection) new URL(JSON_URL).openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(TIME_OUT);
-                connection.setReadTimeout(TIME_OUT);
-                connection.connect();
-                if (connection.getResponseCode() == connection.HTTP_OK) {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
-                    StringBuilder strBuilder = new StringBuilder();
-                    int symbol = 0;
-                    for (symbol = reader.read(); symbol != -1; symbol = reader.read()) {
-                        char sign = (char) symbol;
-                        strBuilder.append(sign);
-                        if (sign == ']') {
-                            Observable.just(strBuilder.toString())
-                                    .map(new Function<String, CountryPOJO>() {
-                                        @Override
-                                        public CountryPOJO apply(String countryString) throws Exception {
-                                            InfoParser parser = new InfoParser();
-                                            return parser.parseCountryInfo(countryString);
-                                        }
-                                    })
-                                    .subscribeOn(Schedulers.newThread())
-                                    .observeOn(AndroidSchedulers.mainThread())
-                                    .subscribe(country -> addCitiesToDB(country));
-                            strBuilder = new StringBuilder();
+        Observable.just("Http Connection")
+                .map(new Function<String, Object>() {
+                    @Override
+                    public Object apply(String s) throws Exception {
+                        HttpURLConnection connection = (HttpURLConnection) new URL(JSON_URL).openConnection();
+                        connection.setRequestMethod("GET");
+                        connection.setConnectTimeout(TIME_OUT);
+                        connection.setReadTimeout(TIME_OUT);
+                        connection.connect();
+                        int response = connection.getResponseCode();
+                        if (response == connection.HTTP_OK) {
+                            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
+                            StringBuilder strBuilder = new StringBuilder();
+                            int symbol = 0;
+                            String line = reader.readLine();
+                            //Remove extra characters
+                            line = line.replace("{", "");
+                            line = line.replace("}", "");
+                            String[] countries = line.split(getString(R.string.END_OF_COUNTRY));
+                            for (String country : countries) {
+                                if (!country.contains(getString(R.string.END_OF_COUNTRY))) {
+                                    country += getString(R.string.END_OF_COUNTRY);
+                                }
+                                Observable.just(country)
+                                        .map(new Function<String, CountryPOJO>() {
+                                            @Override
+                                            public CountryPOJO apply(String countryString) throws Exception {
+                                                InfoParser parser = new InfoParser();
+                                                CountryPOJO country = parser.parseCountryInfo(countryString);
+                                                try {
+                                                    Log.d("12", country.toString());
+                                                } catch (Exception ex) {
+                                                    Log.e("12", countryString);
+                                                }
+                                                return country;
+                                            }
+                                        })
+                                        .subscribeOn(Schedulers.io())
+                                        .observeOn(AndroidSchedulers.mainThread())
+                                        .filter(countryPOJO -> countryPOJO != null)
+                                        .subscribe(countryPOJO -> addCountryToDB(countryPOJO));
+                            }
+                            reader.close();
+                            Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
+                            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK));
+                            sendBroadcast(broadcastIntent);
+                        } else {
+                            Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
+                            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK));
+                            broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), Integer.toString(response));
+                            sendBroadcast(broadcastIntent);
                         }
+                        return new Object();
                     }
-                    reader.close();
-
-                    sleep(500);
-                    Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
-                    sendBroadcast(broadcastIntent);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        };
-
-        Thread thread = new Thread(runnable);
-        thread.start();
+                })
+                .subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe();
 
         return super.onStartCommand(intent, flags, startId);
 //        return Service.START_STICKY;
     }
 
-    private void addCitiesToDB(CountryPOJO country) {
-        realmDB.executeTransactionAsync(new Realm.Transaction() {
-            @Override
-            public void execute(Realm realm) {
-                // Add cities to DB
-                List<String> citiesName = country.getCities();
-                ArrayList<City> cities = new ArrayList<>(citiesName.size());
-                for (String cityName : citiesName) {
-                    cities.add(new City(cityName, country.getCountryName()));
-                }
-                realm.insertOrUpdate(cities);
-                // Add country to DB
-                realm.insertOrUpdate(new Country(country.getCountryName()));
+    private void addCountriesToDB(ArrayList<CountryPOJO> countries) {
+        if (countries == null || countries.isEmpty()) {
+            return;
+        }
+        realmDB.beginTransaction();
+        // Add country to DB
+        for (CountryPOJO country : countries) {
+            RealmList<City> cities = new RealmList<>();
+            for (String city : country.getCities()) {
+                cities.add(new City(city));
             }
-        }, new Realm.Transaction.OnSuccess() {
-            @Override
-            public void onSuccess() {
-                Log.d("12", "Country was added : " + country.getCountryName());
+            try {
+                realmDB.insertOrUpdate(new Country(country.getCountryName(), cities));
+            } catch (Exception ex) {
+                ex.getStackTrace();
+                System.err.println(country.toString());
+                Log.e("12", country.toString());
             }
-        }, new Realm.Transaction.OnError() {
-            @Override
-            public void onError(Throwable error) {
-                error.getStackTrace();
-                Log.e("12", "Country was NOT added : " + country.getCountryName());
-            }
-        });
+        }
+
+        realmDB.commitTransaction();
+
+        Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
+        sendBroadcast(broadcastIntent);
+    }
+
+    private void addCountryToDB(CountryPOJO country) {
+        realmDB.beginTransaction();
+        // Add country to DB
+        RealmList<City> cities = new RealmList<>();
+        for (String city : country.getCities()) {
+            cities.add(new City(city));
+        }
+        try {
+            realmDB.insertOrUpdate(new Country(country.getCountryName(), cities));
+            Log.d("12", country.toString());
+        } catch (Exception ex) {
+            ex.getStackTrace();
+            System.err.println(country.toString());
+            Log.e("12", country.toString());
+        }
+        realmDB.commitTransaction();
     }
 
     @Override
