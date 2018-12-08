@@ -2,7 +2,7 @@
     <string name="app_name">CountriesToCities</string>
     <string name="BROADCAST_ACTION">com.countries.intent.action.BROADCAST</string>
     <string name="EXTRAS_INFO">com.countries.intent.action.INFO</string>
-    <string name="END_OF_COUNTRY">\"]</string>
+    <string name="END_OF_COUNTRY">],</string>
     <string name="EXTRA_STATUS">STATUS</string>
     <string name="STATUS_OK">OK</string>
     <string name="STATUS_NOK">NOK</string>
@@ -10,4 +10,7 @@
     <string name="check_internet">Please, check your internet connection</string>
     <string name="geoname_link">http://api.geonames.org</string>
     <string name="geonames_user">gaijin</string>
+    <string name="countries_url">
+        https://raw.githubusercontent.com/meMo-Minsk/all-countries-and-cities-json/master/countries.json
+    </string>
 </resources>

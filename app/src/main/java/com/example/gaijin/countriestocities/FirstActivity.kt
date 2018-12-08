@@ -64,12 +64,15 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
     override fun onStart() {
         super.onStart()
-        setupPermissions()
+//        setupPermissions()
     }
 
     override fun onStop() {
         super.onStop()
-        unregisterLoaderReceiver(loaderReceiver)
+        try {
+            unregisterLoaderReceiver(loaderReceiver)
+        } catch (ex: Exception) {
+        }
 
     }
 
@@ -207,48 +210,48 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         }
     }
 
-    /*Next methods for check and get permissions from user*/
-    // From - https://www.techotopia.com/index.php/Kotlin_-_Making_Runtime_Permission_Requests_in_Android
-
-    val PERMISSIONS_REQUEST_CODE = 911
-    private val CALL_PERMISSION = Manifest.permission.WRITE_EXTERNAL_STORAGE
-    private fun setupPermissions() {
-        val permission = ContextCompat.checkSelfPermission(
-            this,
-            CALL_PERMISSION
-        )
-
-        if (permission != PackageManager.PERMISSION_GRANTED) {
-            Log.i("12", "Permission denied")
-            makeRequest()
-        }
-    }
-
-    // Permissions request
-    private fun makeRequest() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(CALL_PERMISSION),
-            PERMISSIONS_REQUEST_CODE
-        )
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        when (requestCode) {
-            PERMISSIONS_REQUEST_CODE -> {
-                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                    Log.i("12", "Permission has been denied by user")
-                } else {
-                    Log.i("12", "Permission has been granted by user")
-                }
-            }
-        }
-    }
+//    /*Next methods for check and get permissions from user*/
+//    // From - https://www.techotopia.com/index.php/Kotlin_-_Making_Runtime_Permission_Requests_in_Android
+//
+//    val PERMISSIONS_REQUEST_CODE = 911
+//    private val CALL_PERMISSION = Manifest.permission.WRITE_EXTERNAL_STORAGE
+//    private fun setupPermissions() {
+//        val permission = ContextCompat.checkSelfPermission(
+//            this,
+//            CALL_PERMISSION
+//        )
+//
+//        if (permission != PackageManager.PERMISSION_GRANTED) {
+//            Log.i("12", "Permission denied")
+//            makeRequest()
+//        }
+//    }
+//
+//    // Permissions request
+//    private fun makeRequest() {
+//        ActivityCompat.requestPermissions(
+//            this,
+//            arrayOf(CALL_PERMISSION),
+//            PERMISSIONS_REQUEST_CODE
+//        )
+//    }
+//
+//    override fun onRequestPermissionsResult(
+//        requestCode: Int,
+//        permissions: Array<out String>,
+//        grantResults: IntArray
+//    ) {
+//        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+//
+//        when (requestCode) {
+//            PERMISSIONS_REQUEST_CODE -> {
+//                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+//                    Log.i("12", "Permission has been denied by user")
+//                } else {
+//                    Log.i("12", "Permission has been granted by user")
+//                }
+//            }
+//        }
+//    }
 
 }

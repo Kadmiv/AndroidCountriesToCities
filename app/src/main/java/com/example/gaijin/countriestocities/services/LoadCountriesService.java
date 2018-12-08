@@ -18,6 +18,8 @@ import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
 import io.realm.Realm;
 import io.realm.RealmList;
+import okhttp3.ResponseBody;
+import retrofit2.Call;
 import retrofit2.Response;
 
 import java.io.*;
@@ -30,13 +32,6 @@ import java.util.List;
 import static java.lang.Thread.sleep;
 
 public class LoadCountriesService extends Service {
-
-    private final String JSON_URL = "https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json";
-    private final String JSON_URL_2 = "https://github.com/CoalaWeb/cw-country-iso-code/blob/master/src/cw-country-iso-code.json";
-
-    String ROOT_FOLDER = Environment.getExternalStorageDirectory().getPath() + "/" + Environment.DIRECTORY_DOWNLOADS;
-
-    private final int TIME_OUT = 30000;
 
     public LoadCountriesService() {
     }
@@ -58,7 +53,7 @@ public class LoadCountriesService extends Service {
                 .map(new Function<String, Object>() {
                     @Override
                     public Object apply(String s) throws Exception {
-                        loadCountriesAndCities(loadAlphaCodes());
+                        loadCountriesAndCities();
                         return new Object();
                     }
                 })
@@ -70,87 +65,41 @@ public class LoadCountriesService extends Service {
 //        return Service.START_STICKY;
     }
 
-    private HashMap<String, CountryInfo> loadAlphaCodes() {
-        // Load addtional countries information
-        HashMap<String, CountryInfo> alphaCodes = null;
-        try {
-            Response<List<CountryInfo>> response = App.getGeonamesApi().getCountryInfo().execute();
-            if (response.isSuccessful()) {
-                alphaCodes = new HashMap<>(250);
-                for (CountryInfo country : response.body()) {
-                    alphaCodes.put(country.getName().toLowerCase(), country);
-                }
-            } else {
-                Log.d("12", " Bad response of server !! ");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return alphaCodes;
-    }
 
-    private void loadCountriesAndCities(HashMap<String, CountryInfo> loadAlphaCodes) {
+    private void loadCountriesAndCities() {
         // Init REST API
         // Load countries and alpha-codes
         try {
-
-            HttpURLConnection connection = (HttpURLConnection) new URL(JSON_URL).openConnection();
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(TIME_OUT);
-            connection.setReadTimeout(TIME_OUT);
-            connection.connect();
-            int response = connection.getResponseCode();
-            if (response == connection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), "UTF-8"));
+            Response<ResponseBody> response = App.getGeonamesApi().loadMainJson(getString(R.string.countries_url)).execute();
+            if (response.isSuccessful()) {
+                InputStreamReader streamReader = new InputStreamReader(response.body().byteStream(), "UTF-8");
+                BufferedReader reader = new BufferedReader(streamReader);
                 StringBuilder strBuilder = new StringBuilder();
-                int symbol = 0;
-                String line = reader.readLine();
-                //Remove extra characters
-                line = line.replace("{", "");
-                line = line.replace("}", "");
-                String[] countries = line.split(getString(R.string.END_OF_COUNTRY));
 
-                String folder = makeFolder(ROOT_FOLDER, "Json");
-                scanningFolder(Environment.getExternalStorageDirectory().getPath());
-                File jsonFile = new File(folder + "/country.json");
-                jsonFile.createNewFile();
-                BufferedWriter bw = new BufferedWriter(new FileWriter(jsonFile));
-                for (String country : countries) {
-                    if (!country.contains(getString(R.string.END_OF_COUNTRY))) {
-                        country += getString(R.string.END_OF_COUNTRY);
+                boolean delete = true;
+                for (int sign = reader.read(); sign != -1; sign = reader.read()) {
+                    if ((char) sign == '"') {
+                        delete = !delete;
                     }
-                    Observable.just(country)
-                            .map(new Function<String, CountryPOJO>() {
-                                @Override
-                                public CountryPOJO apply(String countryString) throws Exception {
-                                    InfoParser parser = new InfoParser();
-                                    CountryPOJO country = parser.parseCountryInfo(countryString, loadAlphaCodes);
-                                    try {
-                                        Log.d("12", country.toString());
-                                        Gson gson = new Gson();
-                                        bw.write(gson.toJson(country));
-                                    } catch (Exception ex) {
-                                        Log.e("12", countryString);
-                                    }
-                                    return country;
-                                }
-                            })
-                            .subscribeOn(Schedulers.io())
-                            .observeOn(AndroidSchedulers.mainThread())
-                            .filter(countryPOJO -> countryPOJO != null)
-                            .subscribe(countryPOJO -> addCountryToDB(countryPOJO));
+                    if (delete && (char) sign == ' ') {
+                    } else {
+                        strBuilder.append((char) sign);
+                    }
                 }
 
-                sleep(2000);
+                String line = strBuilder.toString().replaceAll("\n", "");
+                parseJsonString(line);
                 reader.close();
-                bw.close();
+
+                // Send OK broadcast
                 Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
                 broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK));
                 sendBroadcast(broadcastIntent);
             } else {
+                // Send ERROR broadcast
                 Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
                 broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK));
-                broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), Integer.toString(response));
+                broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), Integer.toString(response.code()));
                 sendBroadcast(broadcastIntent);
             }
         } catch (Exception ex) {
@@ -158,37 +107,71 @@ public class LoadCountriesService extends Service {
         }
     }
 
-    private void addCountriesToDB(ArrayList<CountryPOJO> countries) {
-        Realm realmDB = App.getDB();
-        if (countries == null || countries.isEmpty()) {
-            return;
-        }
-        realmDB.beginTransaction();
-        // Add country to DB
-        for (CountryPOJO country : countries) {
-            RealmList<CityRealm> cities = new RealmList<>();
-            for (String city : country.getCities()) {
-                cities.add(new CityRealm(city));
+    private void parseJsonString(String line) {
+        //Remove extra characters
+        line = line.replaceAll("\\{", "");
+        line = line.replaceAll("\\}", "");
+        String[] countries = line.split(getString(R.string.END_OF_COUNTRY));
+        for (String country : countries) {
+            if (!country.contains("]")) {
+                country += "]";
             }
-            try {
-                realmDB.insertOrUpdate(new CountryRealm(country.getCountryName(), cities));
-            } catch (Exception ex) {
-                ex.getStackTrace();
-                System.err.println(country.toString());
-                Log.e("12", country.toString());
-            }
+            Observable.just(country)
+                    .map(new Function<String, CountryPOJO>() {
+                        @Override
+                        public CountryPOJO apply(String countryString) throws Exception {
+                            CountryPOJO country = parseCountryInfo(countryString);
+                            try {
+                                Log.d("12", country.toString());
+                            } catch (Exception ex) {
+                                Log.e("12", countryString);
+                            }
+                            return country;
+                        }
+                    })
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .filter(countryPOJO -> countryPOJO != null)
+                    .filter(countryPOJO -> !countryPOJO.getCountryName().equals(""))
+                    .subscribe(countryPOJO -> addCountryToDB(countryPOJO));
         }
+    }
 
-        realmDB.commitTransaction();
+    public CountryPOJO parseCountryInfo(String countryString) {
+        CountryPOJO country = null;
+        Response<CountryInfo> countryInfo;
+        try {
+            // Normalize of object string
+            String[] cityParameters = countryString.split(":");
+            //Get information for country
+            String name = cityParameters[0];
+            String cities = cityParameters[1];
+            //Get and convert additional information for country
+            String clearName = name.replace("\"", "");
+//            countryInfo = App.getGeonamesApi().getCountryInfo(clearName).execute();
+            String format = "\"%s\"";
+            String code = format;
+            String flag = format;
+//            if (countryInfo.isSuccessful()) {
+//                code = String.format(format, countryInfo.body().getAlpha2Code());
+//                flag = String.format(format, countryInfo.body().getFlag());
+//            }
+            String pattern = "{country_name:%s,country_code:%s,flag:%s,cities:%s}";
+            String cleanSample = String.format(pattern, name, code, flag, cities);
+            // Convert string to CountryPOJO object
+            Gson gson = new Gson();
+            country = gson.fromJson(cleanSample, CountryPOJO.class);
 
-        Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
-        sendBroadcast(broadcastIntent);
+        } catch (Exception ex) {
+            ex.getStackTrace();
+        }
+        return country;
     }
 
     private void addCountryToDB(CountryPOJO country) {
         Realm realmDB = App.getDB();
         realmDB.beginTransaction();
-        // Add country to DB
+        // Create cityList that belong to country
         RealmList<CityRealm> cities = new RealmList<>();
         for (String city : country.getCities()) {
             cities.add(new CityRealm(city));
@@ -207,25 +190,5 @@ public class LoadCountriesService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-    }
-
-    protected String makeFolder(String mainPath, String name) {
-        /*Create path for new folder*/
-        String folderPath = mainPath + "/" + name + "/";
-        File folder = new File(folderPath);
-        //Log.d(LOG_TAG, "Path folder " + folderPath);
-        /*Check folder on disc*/
-        if (!folder.exists()) {
-            folder.mkdir();
-            //Log.d(LOG_TAG, "Folder is exist " + folder.getAbsolutePath());
-        }
-        return folder.getAbsolutePath();
-    }
-
-    protected void scanningFolder(String mainFolderPath) {
-        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        Uri contentUri = Uri.fromFile(new File(mainFolderPath));
-        mediaScanIntent.setData(contentUri);
-        this.sendBroadcast(mediaScanIntent);
     }
 }
