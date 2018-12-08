@@ -1,16 +1,16 @@
-package com.example.gaijin.countriestocities;
+package com.example.gaijin.countriestocities.dataclasses;
 
 import io.realm.RealmObject;
 
-public class City extends RealmObject {
+public class CityRealm extends RealmObject {
 
     String cityName;
 //    String country;
 
-    public City() {
+    public CityRealm() {
     }
 
-    public City(String cityName) {//, String country) {
+    public CityRealm(String cityName) {//, String country) {
         this.cityName = cityName;
 //        this.country = country;
     }

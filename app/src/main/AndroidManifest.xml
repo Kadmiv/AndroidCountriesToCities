@@ -3,8 +3,9 @@
           package="com.example.gaijin.countriestocities">
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
     <application
             android:name=".App"
@@ -13,7 +14,7 @@
             android:roundIcon="@mipmap/ic_launcher_round"
             android:theme="@style/AppTheme">
         <activity
-                android:name=".MainActivity"
+                android:name=".FirstActivity"
                 android:screenOrientation="portrait">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -24,7 +25,7 @@
                 android:name=".InfoActivity"
                 android:screenOrientation="portrait">
             <intent-filter>
-                <action android:name="androidcountries.intent.action.INFO"/>
+                <action android:name="com.countries.intent.action.INFO"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>

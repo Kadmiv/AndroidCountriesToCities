@@ -1,4 +1,4 @@
-package com.example.gaijin.countriestocities;
+package com.example.gaijin.countriestocities.dataclasses;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,11 +12,18 @@ public class CountryPOJO {
     @SerializedName("country_name")
     @Expose
     String countryName;
+    @SerializedName("country_code")
+    @Expose
+    String countryCode;
+    @SerializedName("flag")
+    @Expose
+    String flag;
     @SerializedName("cities")
     @Expose
     List<String> cities = new ArrayList<String>();
 
-    public CountryPOJO(){}
+    public CountryPOJO() {
+    }
 
     public String getCountryName() {
         return countryName;
@@ -24,6 +31,22 @@ public class CountryPOJO {
 
     public void setCountryName(String country) {
         this.countryName = country;
+    }
+
+    public String getCountryCode() {
+        return countryCode;
+    }
+
+    public void setCountryCode(String countryCode) {
+        this.countryCode = countryCode;
+    }
+
+    public String getFlag() {
+        return flag;
+    }
+
+    public void setFlag(String flag) {
+        this.flag = flag;
     }
 
     public List<String> getCities() {
@@ -36,6 +59,10 @@ public class CountryPOJO {
 
     @Override
     public String toString() {
-        return String.format("Country : %s\nCities : %s", countryName, cities.toString());
+        return String.format("Country: %s\nAlpha-code: %s\nFlag: %s\nCities: %s\n",
+                countryName,
+                countryCode,
+                flag,
+                cities.toString());
     }
 }

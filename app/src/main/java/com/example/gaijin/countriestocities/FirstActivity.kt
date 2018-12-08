@@ -1,9 +1,9 @@
 package com.example.gaijin.countriestocities
 
+import android.Manifest
 import android.content.Intent
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
-import android.support.design.widget.Snackbar
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
 import android.view.View
@@ -11,21 +11,24 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import com.example.gaijin.countriestocities.adapters.CityAdapter
 import com.example.gaijin.countriestocities.services.LoadCountriesService
-import io.realm.Realm
 import io.realm.RealmResults
 import kotlinx.android.synthetic.main.activity_main.*
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Environment
+import android.support.v4.app.ActivityCompat
+import android.support.v4.content.ContextCompat
 import android.util.Log
 import android.widget.Toast
-import android.net.ConnectivityManager
-import android.net.NetworkInfo
+import com.example.gaijin.countriestocities.dataclasses.CountryRealm
+import java.io.File
 
 
-class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
+class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
-    var realmDB: Realm? = null
     var adapter: CityAdapter? = null
     var manager: RecyclerView.LayoutManager? = null
     var loaderReceiver: LoaderDBReceiver? = null;
@@ -35,74 +38,86 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        //
-        realmDB = Realm.getDefaultInstance()
-
         // Create and connect to Broadcast
         val intentFilter = IntentFilter()
         intentFilter.addAction(getString(R.string.BROADCAST_ACTION))
         loaderReceiver = LoaderDBReceiver()
-        registerReceiver(loaderReceiver, intentFilter)
-
-        loadData()
-
-    }
-
-    private fun loadData() {
-        // Check internet connection
-        if (hasInternet(applicationContext)) {
-            if (realmDB!!.isEmpty) {
-                startService(Intent(this, LoadCountriesService::class.java))
-                Toast.makeText(this, "DB is empty", Toast.LENGTH_SHORT).show()
-                return;
-            } else {
-                val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
-                broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK))
-                Toast.makeText(this, "DB is NOT empty", Toast.LENGTH_SHORT).show()
-                sendBroadcast(broadcastIntent)
-            }
-        } else {
-            val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
-            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
-            broadcastIntent.putExtra(
-                getString(R.string.EXTRA_CONNECTION_RESULT),
-                getString(R.string.check_internet)
-            )
-            Toast.makeText(this, "Problem with internet", Toast.LENGTH_SHORT).show()
-            sendBroadcast(broadcastIntent)
+        try {
+            registerReceiver(loaderReceiver, intentFilter)
+        } catch (ex: Exception) {
+            unregisterLoaderReceiver(loaderReceiver)
+            registerReceiver(loaderReceiver, intentFilter)
         }
-    }
 
-    override fun onStart() {
-        super.onStart()
-        //Preparation of view components
-        country_spinner.visibility = View.INVISIBLE
-        city_list.visibility = View.INVISIBLE
-        error_text.visibility = View.INVISIBLE
+
+        try_again_btn.setOnClickListener({ loadData() })
 
         manager = LinearLayoutManager(this)
         city_list.layoutManager = manager
         adapter = CityAdapter();
         adapter!!.setOnItemClickListener(this)
         city_list.adapter = adapter
+
+        loadData()
+
     }
 
-    fun hasInternet(context: Context): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        var wifiInfo: NetworkInfo? = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI)
-        if (wifiInfo != null && wifiInfo.isConnected) {
-            return true
-        }
-        wifiInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_MOBILE)
-        if (wifiInfo != null && wifiInfo.isConnected) {
-            return true
-        }
-        wifiInfo = cm.activeNetworkInfo
-        return wifiInfo != null && wifiInfo.isConnected
+    override fun onStart() {
+        super.onStart()
+        setupPermissions()
     }
 
+    override fun onStop() {
+        super.onStop()
+        unregisterLoaderReceiver(loaderReceiver)
+
+    }
+
+    private fun loadData() {
+        //Preparation of view components
+        changeVisibilityOfInfoSection(View.INVISIBLE)
+        load_progress.visibility = View.INVISIBLE
+        // Error views
+        changeVisibilityOfErrorSection(View.INVISIBLE)
+
+        if (App.getDB()!!.isEmpty) {
+            // Check internet connection
+            if (App.hasConnection(applicationContext)) {
+                load_progress.visibility = View.VISIBLE
+                startService(Intent(this, LoadCountriesService::class.java))
+                return;
+            } else {
+                val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+                broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
+                broadcastIntent.putExtra(
+                    getString(R.string.EXTRA_CONNECTION_RESULT),
+                    getString(R.string.check_internet)
+                )
+                sendBroadcast(broadcastIntent)
+            }
+        } else {
+            val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK))
+            sendBroadcast(broadcastIntent)
+        }
+
+    }
+
+    // Visibility switcher of error information views
+    private fun changeVisibilityOfErrorSection(value: Int) {
+        error_text.visibility = value
+        try_again_btn.visibility = value
+        not_connect_image.visibility = value
+    }
+
+    // Visibility switcher of information views
+    private fun changeVisibilityOfInfoSection(value: Int) {
+        country_spinner.visibility = value
+        city_list.visibility = value
+    }
+
+    //This function prepare all views which contains information about countries and cities
     private fun prepareView() {
-
         // Load list of countries from DB
         countries = loadCountries()
         val arrayAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, countries)
@@ -115,18 +130,15 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 adapter!!.cities = loadCities(countries!![position])
-                Snackbar.make(
-                    view!!,
-                    "${countries!![position]} selected. Count of cities: ${adapter!!.itemCount}",
-                    Snackbar.LENGTH_SHORT
-                ).show()
             }
         }
     }
 
+    // Load all country from DB
     private fun loadCountries(): ArrayList<String> {
+        var realmDB = App.getDB()
         realmDB!!.beginTransaction()
-        var countries: RealmResults<Country> = realmDB!!.where(Country::class.java).findAll()
+        var countries: RealmResults<CountryRealm> = realmDB!!.where(CountryRealm::class.java).findAll()
         var countryList = ArrayList<String>()
         for (city in countries) {
             countryList.add(city.countryName)
@@ -136,11 +148,12 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         return countryList
     }
 
+    // Load all cities that are specific to a country
     private fun loadCities(country: String): List<String> {
-        // Load countries form DB
+        var realmDB = App.getDB()
         realmDB!!.beginTransaction()
-        var countries: RealmResults<Country> =
-            realmDB!!.where(Country::class.java).equalTo("countryName", country).findAll()
+        var countries: RealmResults<CountryRealm> =
+            realmDB!!.where(CountryRealm::class.java).equalTo("countryName", country).findAll()
         var cityList = ArrayList<String>()
         for (city in countries[0]!!.cities) {
             cityList.add(city.cityName)
@@ -178,20 +191,64 @@ class MainActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
             when (status) {
                 getString(R.string.STATUS_OK) -> {
                     unregisterLoaderReceiver(loaderReceiver)
-                    country_spinner.visibility = View.VISIBLE
-                    city_list.visibility = View.VISIBLE
+                    changeVisibilityOfInfoSection(View.VISIBLE)
+                    changeVisibilityOfErrorSection(View.INVISIBLE)
                     prepareView()
                 }
                 getString(R.string.STATUS_NOK) -> {
                     var response: String? = intent.getStringExtra(getString(R.string.EXTRA_CONNECTION_RESULT))
                     error_text.text = "Error! $response"
-                    error_text.visibility = View.VISIBLE
+                    changeVisibilityOfInfoSection(View.INVISIBLE)
+                    changeVisibilityOfErrorSection(View.VISIBLE)
                 }
                 else -> {
                 }
             }
-
-
         }
     }
+
+    /*Next methods for check and get permissions from user*/
+    // From - https://www.techotopia.com/index.php/Kotlin_-_Making_Runtime_Permission_Requests_in_Android
+
+    val PERMISSIONS_REQUEST_CODE = 911
+    private val CALL_PERMISSION = Manifest.permission.WRITE_EXTERNAL_STORAGE
+    private fun setupPermissions() {
+        val permission = ContextCompat.checkSelfPermission(
+            this,
+            CALL_PERMISSION
+        )
+
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            Log.i("12", "Permission denied")
+            makeRequest()
+        }
+    }
+
+    // Permissions request
+    private fun makeRequest() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(CALL_PERMISSION),
+            PERMISSIONS_REQUEST_CODE
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            PERMISSIONS_REQUEST_CODE -> {
+                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                    Log.i("12", "Permission has been denied by user")
+                } else {
+                    Log.i("12", "Permission has been granted by user")
+                }
+            }
+        }
+    }
+
 }
