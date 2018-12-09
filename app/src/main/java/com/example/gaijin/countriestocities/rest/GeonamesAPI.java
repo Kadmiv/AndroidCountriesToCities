@@ -33,7 +33,4 @@ public interface GeonamesAPI {
     @GET()
     Call<ResponseBody> loadMainJson(@Url String fileUrl);
 
-
-    @GET("https://restcountries.eu/rest/v2/name/{country}?fields=alpha2Code;flag")
-    Call<CountryInfo> getCountryInfo(@Path("country") String country);
 }

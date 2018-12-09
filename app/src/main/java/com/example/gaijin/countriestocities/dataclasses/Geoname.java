@@ -27,7 +27,7 @@ public class Geoname {
     @SerializedName("population")
     @Expose
     private Integer population;
-    @SerializedName("countryCode")
+    @SerializedName("code")
     @Expose
     private String countryCode;
     @SerializedName("name")
@@ -39,7 +39,7 @@ public class Geoname {
     @SerializedName("adminCodes1")
     @Expose
     private AdminCodes1 adminCodes1;
-    @SerializedName("countryName")
+    @SerializedName("name")
     @Expose
     private String countryName;
     @SerializedName("fcodeName")
@@ -185,7 +185,7 @@ public class Geoname {
 
     @Override
     public String toString() {
-        return String.format(" countryName: %s\n fcodeName: %s\n countryCod: %s\n", countryName, fcodeName, countryCode);
+        return String.format(" name: %s\n fcodeName: %s\n countryCod: %s\n", countryName, fcodeName, countryCode);
     }
 
 }

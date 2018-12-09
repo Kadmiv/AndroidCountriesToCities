@@ -5,16 +5,15 @@ import java.util.List;
 
 import com.google.gson.annotations.Expose;
 import com.google.gson.annotations.SerializedName;
-import io.realm.annotations.PrimaryKey;
 
 public class CountryPOJO {
 
     @SerializedName("country_name")
     @Expose
-    String countryName;
+    String name;
     @SerializedName("country_code")
     @Expose
-    String countryCode;
+    String code;
     @SerializedName("flag")
     @Expose
     String flag;
@@ -25,20 +24,20 @@ public class CountryPOJO {
     public CountryPOJO() {
     }
 
-    public String getCountryName() {
-        return countryName;
+    public String getName() {
+        return name;
     }
 
-    public void setCountryName(String country) {
-        this.countryName = country;
+    public void setName(String country) {
+        this.name = country;
     }
 
-    public String getCountryCode() {
-        return countryCode;
+    public String getCode() {
+        return code;
     }
 
-    public void setCountryCode(String countryCode) {
-        this.countryCode = countryCode;
+    public void setCode(String code) {
+        this.code = code;
     }
 
     public String getFlag() {
@@ -60,8 +59,8 @@ public class CountryPOJO {
     @Override
     public String toString() {
         return String.format("Country: %s\nAlpha-code: %s\nFlag: %s\nCities: %s\n",
-                countryName,
-                countryCode,
+                name,
+                code,
                 flag,
                 cities.toString());
     }

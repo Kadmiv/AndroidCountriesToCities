@@ -11,6 +11,6 @@
     <string name="geoname_link">http://api.geonames.org</string>
     <string name="geonames_user">gaijin</string>
     <string name="countries_url">
-        https://raw.githubusercontent.com/meMo-Minsk/all-countries-and-cities-json/master/countries.json
+        https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json
     </string>
 </resources>

@@ -10,6 +10,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.functions.Function
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_info.*
+import retrofit2.Retrofit
 import java.lang.Exception
 
 
@@ -19,6 +20,8 @@ class InfoActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_info)
         var cityName: String = intent.getStringExtra(Intent.EXTRA_TEXT)
+
+//        Retrofit fit
 
         var geonamesAPI = App.getGeonamesApi()
 
