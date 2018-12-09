@@ -24,6 +24,7 @@ import android.support.v4.content.ContextCompat
 import android.util.Log
 import android.widget.Toast
 import com.example.gaijin.countriestocities.dataclasses.CountryRealm
+import io.realm.Realm
 import java.io.File
 
 
@@ -33,11 +34,13 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
     var manager: RecyclerView.LayoutManager? = null
     var loaderReceiver: LoaderDBReceiver? = null;
     var countries: ArrayList<String>? = null
+    var realmDB: Realm? = null;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        realmDB = Realm.getDefaultInstance();
         // Create and connect to Broadcast
         val intentFilter = IntentFilter()
         intentFilter.addAction(getString(R.string.BROADCAST_ACTION))
@@ -83,7 +86,7 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         // Error views
         changeVisibilityOfErrorSection(View.INVISIBLE)
 
-        if (App.getDB()!!.isEmpty) {
+        if (realmDB!!.isEmpty) {
             // Check internet connection
             if (App.hasConnection(applicationContext)) {
                 load_progress.visibility = View.VISIBLE
@@ -93,8 +96,8 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
                 val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
                 broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
                 broadcastIntent.putExtra(
-                    getString(R.string.EXTRA_CONNECTION_RESULT),
-                    getString(R.string.check_internet)
+                        getString(R.string.EXTRA_CONNECTION_RESULT),
+                        getString(R.string.check_internet)
                 )
                 sendBroadcast(broadcastIntent)
             }
@@ -127,7 +130,7 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         country_spinner.adapter = arrayAdapter
 
         country_spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener,
-            AdapterView.OnItemClickListener {
+                AdapterView.OnItemClickListener {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
             override fun onItemClick(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {}
 
@@ -139,7 +142,6 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
     // Load all country from DB
     private fun loadCountries(): ArrayList<String> {
-        var realmDB = App.getDB()
         realmDB!!.beginTransaction()
         var countries: RealmResults<CountryRealm> = realmDB!!.where(CountryRealm::class.java).findAll()
         var countryList = ArrayList<String>()
@@ -153,10 +155,9 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
     // Load all cities that are specific to a country
     private fun loadCities(country: String): List<String> {
-        var realmDB = App.getDB()
         realmDB!!.beginTransaction()
         var countries: RealmResults<CountryRealm> =
-            realmDB!!.where(CountryRealm::class.java).equalTo("countryName", country).findAll()
+                realmDB!!.where(CountryRealm::class.java).equalTo("countryName", country).findAll()
         var cityList = ArrayList<String>()
         for (city in countries[0]!!.cities) {
             cityList.add(city.cityName)

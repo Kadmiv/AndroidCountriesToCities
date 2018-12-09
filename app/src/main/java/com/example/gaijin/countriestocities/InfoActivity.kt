@@ -5,11 +5,13 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import com.example.gaijin.countriestocities.dataclasses.GeonamesInfo
+import com.example.gaijin.countriestocities.rest.GeonamesAPI
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.functions.Function
 import io.reactivex.schedulers.Schedulers
 import kotlinx.android.synthetic.main.activity_info.*
+import retrofit2.Response
 import retrofit2.Retrofit
 import java.lang.Exception
 
@@ -20,32 +22,33 @@ class InfoActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_info)
         var cityName: String = intent.getStringExtra(Intent.EXTRA_TEXT)
-
-//        Retrofit fit
-
-        var geonamesAPI = App.getGeonamesApi()
+        var user = getString(R.string.geonames_user)
+        var geonamesApi = GeonamesAPI.Factory.getInstance()
+        var response: Response<GeonamesInfo>? = null
 
         Observable.just<String>(cityName)
-            .map { city ->
-                var response = geonamesAPI
-                    .getData(city, 1, getString(R.string.geonames_user))
-                    .execute()
-                if (response.isSuccessful()) {
-                    var info = response.body()
+                .map { city ->
                     try {
-                        Log.d("12", "Response Body " + info!!.geonames.toString());
-                        return@map info!!.geonames.toString()
+                        var response = geonamesApi.getData(city, 1, user).execute()
+                        if (response.isSuccessful()) {
+                            var info = response.body()
+                            try {
+                                Log.d("12", "Response Body " + info!!.geonames.toString());
+                                return@map info!!.geonames.toString()
+                            } catch (ex: Exception) {
+                                Log.d("12", "Error Body " + response.errorBody());
+                            }
+                        } else {
+                            Log.d("12", "Error Body " + response.errorBody());
+                        }
                     } catch (ex: Exception) {
-                        Log.d("12", "Error Body " + response.errorBody());
+                        ex.stackTrace
                     }
-                } else {
-                    Log.d("12", "Error Body " + response.errorBody());
+                    return@map ""
                 }
-                return@map ""
-            }
-            .subscribeOn(Schedulers.io())
-            .observeOn(AndroidSchedulers.mainThread())
-            .subscribe { cityInfo -> name_of_city.text = cityInfo }
+                .subscribeOn(Schedulers.newThread())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe { cityInfo -> name_of_city.text = cityInfo }
 
 
         //        Observable.just<String>(cityName)
