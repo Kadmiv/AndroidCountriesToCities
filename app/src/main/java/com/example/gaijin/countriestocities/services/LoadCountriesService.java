@@ -6,10 +6,11 @@ import android.os.IBinder;
 import android.util.Log;
 
 import com.example.gaijin.countriestocities.*;
-import com.example.gaijin.countriestocities.dataclasses.CityRealm;
-import com.example.gaijin.countriestocities.dataclasses.CountryInfo;
-import com.example.gaijin.countriestocities.dataclasses.CountryRealm;
-import com.example.gaijin.countriestocities.dataclasses.CountryPOJO;
+import com.example.gaijin.countriestocities.dataclasses.Country;
+import com.example.gaijin.countriestocities.dataclasses.GeonamePart;
+import com.example.gaijin.countriestocities.dataclasses.Info;
+import com.example.gaijin.countriestocities.dataclasses.RealmCity;
+import com.example.gaijin.countriestocities.dataclasses.RealmCountry;
 import com.example.gaijin.countriestocities.rest.GeonamesAPI;
 import com.google.gson.Gson;
 
@@ -21,12 +22,9 @@ import io.reactivex.schedulers.Schedulers;
 import io.realm.Realm;
 import io.realm.RealmList;
 import okhttp3.ResponseBody;
-import retrofit2.Call;
-import retrofit2.Callback;
 import retrofit2.Response;
 
 import java.io.*;
-import java.util.concurrent.ExecutionException;
 
 import static java.lang.Thread.sleep;
 
@@ -106,14 +104,24 @@ public class LoadCountriesService extends Service {
             if (!country.contains("]")) {
                 country += "]";
             }
-            Observable.just(country)
-                    .map(new Function<String, CountryPOJO>() {
-                        @Override
-                        public CountryPOJO apply(String countryString) throws Exception {
 
-                            CountryPOJO country = null;
+            Country countryObject = null;
+            try {
+                countryObject = parseCountryInfo(country);
+            } catch (Exception ex) {
+                ex.getStackTrace();
+                Log.e("12", country);
+            }
+
+            Observable.just(country)
+                    .map(new Function<String, Country>() {
+                        @Override
+                        public Country apply(String countryString) throws Exception {
+
+                            Country country = null;
                             try {
                                 country = parseCountryInfo(countryString);
+                                country = addAdditionalInfo(country);
                             } catch (Exception ex) {
                                 ex.getStackTrace();
                                 Log.e("12", countryString);
@@ -125,21 +133,21 @@ public class LoadCountriesService extends Service {
                     })
                     .subscribeOn(Schedulers.newThread())
                     .observeOn(AndroidSchedulers.mainThread())
-                    .onErrorResumeNext(new Function<Throwable, ObservableSource<? extends CountryPOJO>>() {
+                    .onErrorResumeNext(new Function<Throwable, ObservableSource<? extends Country>>() {
                         @Override
-                        public ObservableSource<? extends CountryPOJO> apply(Throwable throwable) throws Exception {
+                        public ObservableSource<? extends Country> apply(Throwable throwable) throws Exception {
                             throwable.getStackTrace();
                             return null;
                         }
                     })
-                    .filter(countryPOJO -> countryPOJO != null)
-                    .filter(countryPOJO -> !countryPOJO.getName().equals(""))
-                    .subscribe(countryPOJO -> addAdditionalInfo(countryPOJO));
+                    .filter(country_ -> country_ != null)
+                    .filter(country_ -> !country_.getName().equals("%s"))
+                    .subscribe(country_ -> addCountryToDB(country_));
         }
     }
 
-    public CountryPOJO parseCountryInfo(String countryString) {
-        CountryPOJO country = null;
+    public Country parseCountryInfo(String countryString) {
+        Country country = null;
         String pattern = "{country_name:%s,country_code:%s,flag:%s,cities:%s}";
         String format = "\"%s\"";
         try {
@@ -153,52 +161,53 @@ public class LoadCountriesService extends Service {
             String code = format;
             String flag = format;
             String cleanSample = String.format(pattern, name, code, flag, cities);
-            // Convert string to CountryPOJO object
+            // Convert string to Country object
             Gson gson = new Gson();
-            country = gson.fromJson(cleanSample, CountryPOJO.class);
+            country = gson.fromJson(cleanSample, Country.class);
 
         } catch (Exception ex) {
             ex.getStackTrace();
             String cleanSample = String.format(pattern, format, format, format, "[]");
-            // Convert string to CountryPOJO object
+            // Convert string to Country object
             Gson gson = new Gson();
-            country = gson.fromJson(cleanSample, CountryPOJO.class);
+            country = gson.fromJson(cleanSample, Country.class);
         }
         return country;
     }
 
 
-    private void addAdditionalInfo(CountryPOJO country) {
-        geonamesApi
-                .getCountryInfo(country.getName())
-                .enqueue(new Callback<CountryInfo>() {
-                    @Override
-                    public void onResponse(Call<CountryInfo> call, Response<CountryInfo> response) {
-                        CountryInfo countryInfo = response.body();
-                        String newCode = String.format(country.getCode(), countryInfo.getAlpha2Code());
-                        String newFlag = String.format(country.getFlag(), countryInfo.getFlag());
-                        country.setCode(newCode);
-                        country.setFlag(newFlag);
-                    }
+    private Country addAdditionalInfo(Country country) {
+        try {
+            Response<Info> response = geonamesApi
+                    .getCountryInfo(country.getName(), 1, getString(R.string.geonames_user))
+                    .execute();
+            if (response.isSuccessful()) {
+                Info countryInfo = response.body();
+                GeonamePart geonamePart = countryInfo.getGeonames().get(0);
+                String newCode = String.format(country.getCode(), geonamePart.getCountryCode());
+                country.setCode(newCode);
+            } else {
 
-                    @Override
-                    public void onFailure(Call<CountryInfo> call, Throwable t) {
-                        addCountryToDB(country);
-                    }
-                });
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
+        return country;
     }
 
-    private void addCountryToDB(CountryPOJO country) {
+    private void addCountryToDB(Country country) {
         Realm realmDB = Realm.getDefaultInstance();
         realmDB.beginTransaction();
         // Create cityList that belong to country
-        RealmList<CityRealm> cities = new RealmList<>();
+        RealmList<RealmCity> cities = new RealmList<>();
         for (String city : country.getCities()) {
-            cities.add(new CityRealm(city));
+            cities.add(new RealmCity(city));
         }
         try {
-            realmDB.insertOrUpdate(new CountryRealm(country.getName(), cities));
+            RealmCountry newCountry = new RealmCountry(country.getName(), cities);
+            newCountry.setAlphaCode(country.getCode());
+            realmDB.insertOrUpdate(newCountry);
             Log.d("12", country.toString());
         } catch (Exception ex) {
             ex.getStackTrace();

@@ -4,17 +4,17 @@ import io.realm.RealmList;
 import io.realm.RealmObject;
 import io.realm.annotations.PrimaryKey;
 
-public class CountryRealm extends RealmObject {
+public class RealmCountry extends RealmObject {
 
     @PrimaryKey
     private String countryName;
     private String alphaCode;
-    private RealmList<CityRealm> cities;
+    private RealmList<RealmCity> cities;
 
-    public CountryRealm() {
+    public RealmCountry() {
     }
 
-    public CountryRealm(String countryName, RealmList<CityRealm> cities) {
+    public RealmCountry(String countryName, RealmList<RealmCity> cities) {
         this.countryName = countryName;
         this.cities = cities;
     }
@@ -27,11 +27,11 @@ public class CountryRealm extends RealmObject {
         this.countryName = countryName;
     }
 
-    public RealmList<CityRealm> getCities() {
+    public RealmList<RealmCity> getCities() {
         return cities;
     }
 
-    public void setCities(RealmList<CityRealm> cities) {
+    public void setCities(RealmList<RealmCity> cities) {
         this.cities = cities;
     }
 

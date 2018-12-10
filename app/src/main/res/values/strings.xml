@@ -11,6 +11,12 @@
     <string name="geoname_link">http://api.geonames.org</string>
     <string name="geonames_user">gaijin</string>
     <string name="countries_url">
-        https://raw.githubusercontent.com/David-Haim/CountriesToCitiesJSON/master/countriesToCities.json
+        https://raw.githubusercontent.com/Kadmiv/AndroidCountriesToCities/master/countries_and_cities.json
     </string>
+    <string name="CITY_NAME">city_name</string>
+    <string name="COUNTRY_CODE">country_code</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="try_again">Try again</string>
 </resources>

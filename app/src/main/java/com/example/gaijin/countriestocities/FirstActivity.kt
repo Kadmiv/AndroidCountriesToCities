@@ -1,31 +1,25 @@
 package com.example.gaijin.countriestocities
 
-import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
-import android.support.v7.app.AppCompatActivity
+import android.content.IntentFilter
 import android.os.Bundle
+import android.support.v7.app.AppCompatActivity
 import android.support.v7.widget.LinearLayoutManager
 import android.support.v7.widget.RecyclerView
+import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.SpinnerAdapter
+import android.widget.Toast
 import com.example.gaijin.countriestocities.adapters.CityAdapter
+import com.example.gaijin.countriestocities.dataclasses.RealmCountry
 import com.example.gaijin.countriestocities.services.LoadCountriesService
+import io.realm.Realm
 import io.realm.RealmResults
 import kotlinx.android.synthetic.main.activity_main.*
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Environment
-import android.support.v4.app.ActivityCompat
-import android.support.v4.content.ContextCompat
-import android.util.Log
-import android.widget.Toast
-import com.example.gaijin.countriestocities.dataclasses.CountryRealm
-import io.realm.Realm
-import java.io.File
 
 
 class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
@@ -128,7 +122,6 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
         countries = loadCountries()
         val arrayAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, countries)
         country_spinner.adapter = arrayAdapter
-
         country_spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener,
                 AdapterView.OnItemClickListener {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -143,10 +136,10 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
     // Load all country from DB
     private fun loadCountries(): ArrayList<String> {
         realmDB!!.beginTransaction()
-        var countries: RealmResults<CountryRealm> = realmDB!!.where(CountryRealm::class.java).findAll()
+        var countries: RealmResults<RealmCountry> = realmDB!!.where(RealmCountry::class.java).findAll()
         var countryList = ArrayList<String>()
         for (city in countries) {
-            countryList.add(city.countryName)
+            countryList.add("${city.countryName}, ${city.alphaCode}")
         }
         realmDB!!.commitTransaction()
         countryList.sort()
@@ -156,8 +149,9 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
     // Load all cities that are specific to a country
     private fun loadCities(country: String): List<String> {
         realmDB!!.beginTransaction()
-        var countries: RealmResults<CountryRealm> =
-                realmDB!!.where(CountryRealm::class.java).equalTo("countryName", country).findAll()
+        var name = country.split(", ")[0]
+        var countries: RealmResults<RealmCountry> =
+                realmDB!!.where(RealmCountry::class.java).equalTo("countryName", name).findAll()
         var cityList = ArrayList<String>()
         for (city in countries[0]!!.cities) {
             cityList.add(city.cityName)
@@ -177,7 +171,9 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
 
         if (city != null) {
             var intent = Intent(getString(R.string.EXTRAS_INFO))
-            intent.putExtra(Intent.EXTRA_TEXT, city)
+            intent.putExtra(getString(R.string.CITY_NAME), city)
+            var country = countries!![country_spinner.selectedItemPosition]
+            intent.putExtra(getString(R.string.COUNTRY_CODE), country)
             startActivity(intent)
         }
     }
