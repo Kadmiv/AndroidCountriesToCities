@@ -5,36 +5,112 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.os.PersistableBundle
+import android.support.v4.app.Fragment
+import android.support.v4.app.FragmentManager
 import android.support.v7.app.AppCompatActivity
-import android.support.v7.widget.LinearLayoutManager
-import android.support.v7.widget.RecyclerView
 import android.util.Log
-import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.SpinnerAdapter
+
 import android.widget.Toast
-import com.example.gaijin.countriestocities.adapters.CityAdapter
-import com.example.gaijin.countriestocities.dataclasses.RealmCountry
+import com.example.gaijin.countriestocities.fragments.CountiesFragment
+import com.example.gaijin.countriestocities.fragments.ErrorFragment
+import com.example.gaijin.countriestocities.fragments.InProcessFragment
 import com.example.gaijin.countriestocities.services.LoadCountriesService
 import io.realm.Realm
-import io.realm.RealmResults
-import kotlinx.android.synthetic.main.activity_main.*
 
 
-class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
+class FirstActivity : AppCompatActivity() {
 
-    var adapter: CityAdapter? = null
-    var manager: RecyclerView.LayoutManager? = null
     var loaderReceiver: LoaderDBReceiver? = null;
-    var countries: ArrayList<String>? = null
+
     var realmDB: Realm? = null;
+    var fragmentManager: FragmentManager? = null;
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Create DB
         realmDB = Realm.getDefaultInstance();
+        fragmentManager = supportFragmentManager
+
+        registerReceiver()
+        loadData()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        registerReceiver()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterLoaderReceiver(loaderReceiver)
+    }
+
+    // This function load data from DB or file, if DB id empty
+    private fun loadData() {
+        //Loading data process view
+        var inProcessFragment = InProcessFragment()
+        replaceFragment(inProcessFragment)
+
+        if (realmDB!!.isEmpty) {
+            // Check internet connection
+            if (App.hasConnection(applicationContext)) {
+                startService(Intent(this, LoadCountriesService::class.java))
+                return;
+            } else {
+                sendNokBroadcast(getString(R.string.check_internet))
+            }
+        } else {
+            val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK))
+            sendBroadcast(broadcastIntent)
+        }
+
+    }
+
+    private fun sendNokBroadcast(wrongInfo: String) {
+        val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
+        broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
+        broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), wrongInfo)
+        sendBroadcast(broadcastIntent)
+    }
+
+    private fun replaceFragment(fragmentForChange: Fragment) {
+        val transaction = fragmentManager!!.beginTransaction()
+        transaction.replace(R.id.first_fragment_container, fragmentForChange)
+        transaction.commit()
+    }
+
+
+    inner class LoaderDBReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+
+            var status: String = intent.getStringExtra(getString(R.string.EXTRA_STATUS))
+            Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+            when (status) {
+                getString(R.string.STATUS_OK) -> {
+                    unregisterLoaderReceiver(loaderReceiver)
+                    var countryFragment = CountiesFragment()
+                    replaceFragment(countryFragment)
+                }
+                getString(R.string.STATUS_NOK) -> {
+                    var response: String? = intent.getStringExtra(getString(R.string.EXTRA_CONNECTION_RESULT))
+                    var errorFragment = ErrorFragment()
+                    errorFragment.errorText = "Error! $response"
+                    replaceFragment(errorFragment)
+                }
+                getString(R.string.STATUS_RELOAD) -> {
+                    loadData()
+                }
+                else -> {
+                }
+            }
+        }
+    }
+
+    private fun registerReceiver() {
         // Create and connect to Broadcast
         val intentFilter = IntentFilter()
         intentFilter.addAction(getString(R.string.BROADCAST_ACTION))
@@ -45,210 +121,14 @@ class FirstActivity : AppCompatActivity(), CityAdapter.OnItemClickListener {
             unregisterLoaderReceiver(loaderReceiver)
             registerReceiver(loaderReceiver, intentFilter)
         }
-
-
-        try_again_btn.setOnClickListener({ loadData() })
-
-        manager = LinearLayoutManager(this)
-        city_list.layoutManager = manager
-        adapter = CityAdapter();
-        adapter!!.setOnItemClickListener(this)
-        city_list.adapter = adapter
-
-        loadData()
-
-    }
-
-    override fun onStart() {
-        super.onStart()
-//        setupPermissions()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        try {
-            unregisterLoaderReceiver(loaderReceiver)
-        } catch (ex: Exception) {
-        }
-
-    }
-
-    private fun loadData() {
-        //Preparation of view components
-        changeVisibilityOfInfoSection(View.INVISIBLE)
-        load_progress.visibility = View.INVISIBLE
-        // Error views
-        changeVisibilityOfErrorSection(View.INVISIBLE)
-
-        if (realmDB!!.isEmpty) {
-            // Check internet connection
-            if (App.hasConnection(applicationContext)) {
-                load_progress.visibility = View.VISIBLE
-                startService(Intent(this, LoadCountriesService::class.java))
-                return;
-            } else {
-                val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
-                broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK))
-                broadcastIntent.putExtra(
-                        getString(R.string.EXTRA_CONNECTION_RESULT),
-                        getString(R.string.check_internet)
-                )
-                sendBroadcast(broadcastIntent)
-            }
-        } else {
-            val broadcastIntent = Intent(getString(R.string.BROADCAST_ACTION))
-            broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK))
-            sendBroadcast(broadcastIntent)
-        }
-
-    }
-
-    // Visibility switcher of error information views
-    private fun changeVisibilityOfErrorSection(value: Int) {
-        error_text.visibility = value
-        try_again_btn.visibility = value
-        not_connect_image.visibility = value
-    }
-
-    // Visibility switcher of information views
-    private fun changeVisibilityOfInfoSection(value: Int) {
-        country_spinner.visibility = value
-        city_list.visibility = value
-    }
-
-    //This function prepare all views which contains information about countries and cities
-    private fun prepareView() {
-        // Load list of countries from DB
-        countries = loadCountries()
-        val arrayAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, countries)
-        country_spinner.adapter = arrayAdapter
-        country_spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener,
-                AdapterView.OnItemClickListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-            override fun onItemClick(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {}
-
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                adapter!!.cities = loadCities(countries!![position])
-            }
-        }
-    }
-
-    // Load all country from DB
-    private fun loadCountries(): ArrayList<String> {
-        realmDB!!.beginTransaction()
-        var countries: RealmResults<RealmCountry> = realmDB!!.where(RealmCountry::class.java).findAll()
-        var countryList = ArrayList<String>()
-        for (city in countries) {
-            countryList.add("${city.countryName}, ${city.alphaCode}")
-        }
-        realmDB!!.commitTransaction()
-        countryList.sort()
-        return countryList
-    }
-
-    // Load all cities that are specific to a country
-    private fun loadCities(country: String): List<String> {
-        realmDB!!.beginTransaction()
-        var name = country.split(", ")[0]
-        var countries: RealmResults<RealmCountry> =
-                realmDB!!.where(RealmCountry::class.java).equalTo("countryName", name).findAll()
-        var cityList = ArrayList<String>()
-        for (city in countries[0]!!.cities) {
-            cityList.add(city.cityName)
-        }
-        realmDB!!.commitTransaction()
-        cityList.sort()
-        return cityList
-    }
-
-    override fun onItemClick(view: View?, position: Int) {
-        var city: String? = null
-        try {
-            city = adapter!!.cities[position]
-        } catch (ex: Exception) {
-            return
-        }
-
-        if (city != null) {
-            var intent = Intent(getString(R.string.EXTRAS_INFO))
-            intent.putExtra(getString(R.string.CITY_NAME), city)
-            var country = countries!![country_spinner.selectedItemPosition]
-            intent.putExtra(getString(R.string.COUNTRY_CODE), country)
-            startActivity(intent)
-        }
     }
 
     private fun unregisterLoaderReceiver(loaderReceiver: LoaderDBReceiver?) {
-        unregisterReceiver(loaderReceiver);
-    }
-
-    inner class LoaderDBReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            Log.d("12", "Broadcast was receive")
-            Toast.makeText(applicationContext, "Broadcast was receive", Toast.LENGTH_SHORT).show()
-            var status: String = intent.getStringExtra(getString(R.string.EXTRA_STATUS))
-            load_progress.visibility = View.INVISIBLE
-            when (status) {
-                getString(R.string.STATUS_OK) -> {
-                    unregisterLoaderReceiver(loaderReceiver)
-                    changeVisibilityOfInfoSection(View.VISIBLE)
-                    changeVisibilityOfErrorSection(View.INVISIBLE)
-                    prepareView()
-                }
-                getString(R.string.STATUS_NOK) -> {
-                    var response: String? = intent.getStringExtra(getString(R.string.EXTRA_CONNECTION_RESULT))
-                    error_text.text = "Error! $response"
-                    changeVisibilityOfInfoSection(View.INVISIBLE)
-                    changeVisibilityOfErrorSection(View.VISIBLE)
-                }
-                else -> {
-                }
-            }
+        try {
+            unregisterReceiver(loaderReceiver);
+        } catch (ex: java.lang.Exception) {
+            ex.stackTrace
         }
     }
-
-//    /*Next methods for check and get permissions from user*/
-//    // From - https://www.techotopia.com/index.php/Kotlin_-_Making_Runtime_Permission_Requests_in_Android
-//
-//    val PERMISSIONS_REQUEST_CODE = 911
-//    private val CALL_PERMISSION = Manifest.permission.WRITE_EXTERNAL_STORAGE
-//    private fun setupPermissions() {
-//        val permission = ContextCompat.checkSelfPermission(
-//            this,
-//            CALL_PERMISSION
-//        )
-//
-//        if (permission != PackageManager.PERMISSION_GRANTED) {
-//            Log.i("12", "Permission denied")
-//            makeRequest()
-//        }
-//    }
-//
-//    // Permissions request
-//    private fun makeRequest() {
-//        ActivityCompat.requestPermissions(
-//            this,
-//            arrayOf(CALL_PERMISSION),
-//            PERMISSIONS_REQUEST_CODE
-//        )
-//    }
-//
-//    override fun onRequestPermissionsResult(
-//        requestCode: Int,
-//        permissions: Array<out String>,
-//        grantResults: IntArray
-//    ) {
-//        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-//
-//        when (requestCode) {
-//            PERMISSIONS_REQUEST_CODE -> {
-//                if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-//                    Log.i("12", "Permission has been denied by user")
-//                } else {
-//                    Log.i("12", "Permission has been granted by user")
-//                }
-//            }
-//        }
-//    }
 
 }

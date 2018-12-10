@@ -36,7 +36,7 @@ data class Geoname(
     var lat: String,
     @SerializedName("lng")
     var lng: String,
-    @SerializedName("name")
+    @SerializedName("title")
     var name: String,
     @SerializedName("population")
     var population: Int,

@@ -65,36 +65,34 @@ public class LoadCountriesService extends Service {
     }
 
     private void loadCountriesAndCities() {
-        // Init REST API
         // Load countries and alpha-codes
         geonamesApi = GeonamesAPI.Factory.getInstance();
         try {
             Response<ResponseBody> response = geonamesApi.loadMainJson(getString(R.string.countries_url)).execute();
             if (response.isSuccessful()) {
+                // Read all JSON file
                 InputStreamReader streamReader = new InputStreamReader(response.body().byteStream(), "UTF-8");
                 BufferedReader reader = new BufferedReader(streamReader);
-
                 String line = reader.readLine();
                 reader.close();
 
                 parseJsonString(line);
-
                 // Send OK broadcast
                 Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
                 broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_OK));
                 sendBroadcast(broadcastIntent);
             } else {
                 // Send ERROR broadcast
-                Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
-                broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK));
-                broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), Integer.toString(response.code()));
-                sendBroadcast(broadcastIntent);
+                sendNokBroadcast(Integer.toString(response.code()));
             }
         } catch (Exception ex) {
             ex.getStackTrace();
+            sendNokBroadcast(getString(R.string.check_internet));
         }
     }
 
+    // This function parse all JSON string for separate string-object
+    // After that string convert to Country object
     private void parseJsonString(String line) {
         //Remove extra characters
         line = line.replace("{", "");
@@ -107,7 +105,7 @@ public class LoadCountriesService extends Service {
 
             Country countryObject = null;
             try {
-                countryObject = parseCountryInfo(country);
+                countryObject = convertToCountryObject(country);
             } catch (Exception ex) {
                 ex.getStackTrace();
                 Log.e("12", country);
@@ -120,14 +118,13 @@ public class LoadCountriesService extends Service {
 
                             Country country = null;
                             try {
-                                country = parseCountryInfo(countryString);
+                                country = convertToCountryObject(countryString);
                                 country = addAdditionalInfo(country);
+                                Log.d("12", country.toString());
                             } catch (Exception ex) {
                                 ex.getStackTrace();
                                 Log.e("12", countryString);
                             }
-                            //Get and convert additional information for country
-
                             return country;
                         }
                     })
@@ -146,7 +143,7 @@ public class LoadCountriesService extends Service {
         }
     }
 
-    public Country parseCountryInfo(String countryString) {
+    public Country convertToCountryObject(String countryString) {
         Country country = null;
         String pattern = "{country_name:%s,country_code:%s,flag:%s,cities:%s}";
         String format = "\"%s\"";
@@ -176,6 +173,7 @@ public class LoadCountriesService extends Service {
     }
 
 
+    // This function send request and add additional info (alpha-code) for country
     private Country addAdditionalInfo(Country country) {
         try {
             Response<Info> response = geonamesApi
@@ -207,14 +205,18 @@ public class LoadCountriesService extends Service {
         try {
             RealmCountry newCountry = new RealmCountry(country.getName(), cities);
             newCountry.setAlphaCode(country.getCode());
-            realmDB.insertOrUpdate(newCountry);
-            Log.d("12", country.toString());
+            realmDB.insert(newCountry);
         } catch (Exception ex) {
-            ex.getStackTrace();
-            System.err.println(country.toString());
-            Log.e("12", country.toString());
+//            sendNokBroadcast(getString(R.string.check_internet));
         }
         realmDB.commitTransaction();
+    }
+
+    private void sendNokBroadcast(String wrongInfo) {
+        Intent broadcastIntent = new Intent(getString(R.string.BROADCAST_ACTION));
+        broadcastIntent.putExtra(getString(R.string.EXTRA_STATUS), getString(R.string.STATUS_NOK));
+        broadcastIntent.putExtra(getString(R.string.EXTRA_CONNECTION_RESULT), wrongInfo);
+        sendBroadcast(broadcastIntent);
     }
 
     @Override

@@ -3,6 +3,9 @@ package com.example.gaijin.countriestocities.rest;
 import com.example.gaijin.countriestocities.dataclasses.GeonamesResult;
 import com.example.gaijin.countriestocities.dataclasses.Info;
 
+import java.time.Duration;
+
+import okhttp3.OkHttpClient;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.Retrofit;
