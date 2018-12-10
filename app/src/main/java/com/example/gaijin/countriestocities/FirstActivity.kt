@@ -88,7 +88,7 @@ class FirstActivity : AppCompatActivity() {
         override fun onReceive(context: Context, intent: Intent) {
 
             var status: String = intent.getStringExtra(getString(R.string.EXTRA_STATUS))
-            Toast.makeText(context, status, Toast.LENGTH_LONG).show()
+//            Toast.makeText(context, status, Toast.LENGTH_LONG).show()
             when (status) {
                 getString(R.string.STATUS_OK) -> {
                     unregisterLoaderReceiver(loaderReceiver)
